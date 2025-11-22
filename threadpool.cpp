@@ -16,7 +16,7 @@ class ThreadPool
 {
 
     unsigned short m_threads;
-    std::vector<std::thread> threads_coll;
+    std::vector<std::jthread> threads_coll;
     std::queue<std::function<void(int)>> tasks_queue;
 
     std::mutex mu;
@@ -48,7 +48,25 @@ public:
         }
     }
 
-    void execute() {}
+    ~ThreadPool()
+    {
+
+        std::unique_lock<std::mutex> u_lock(mu);
+        finish_interrupt = true;
+        u_lock.unlock();
+
+        cond.notify_all();
+
+    }
+
+    
+    void execute(auto task) {
+        std::unique_lock<std::mutex> u_lock(mu);
+        tasks_queue.push(task);
+        u_lock.unlock();
+
+        cond.notify_one();
+    }
 };
 
 int main()
@@ -58,7 +76,11 @@ int main()
     std::cout << "H/D cores = " << std::thread::hardware_concurrency() << "\n";
 
     ThreadPool pool{pool_size};
-    pool.execute(some_task);
+
+    do{
+        pool.execute([](int val) -> void
+                 { std::cout << "Sensor fusion task is : " << val; });
+    } while (true);
 
     return 0;
 }
